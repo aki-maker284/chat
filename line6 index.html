@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙人即時聊天室</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        html, body { width: 100%; height: 100%; overflow: hidden; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; }
+        
+        /* 登入視窗居中 */
+        .login-box { background: white; padding: 36px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 340px; text-align: center; }
+        .login-box h2 { margin-bottom: 20px; color: #1a73e8; }
+        .login-box input { width: 100%; padding: 12px; margin-bottom: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .login-box button { width: 100%; padding: 12px; background: #1a73e8; border: none; color: white; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 15px; }
+
+        /* 全螢幕主聊天介面 */
+        .chat-app { width: 100vw; height: 100vh; background: #ffffff; display: flex; flex-direction: column; }
+        .chat-header { background: #2c3e50; color: white; padding: 18px 24px; font-weight: bold; text-align: center; font-size: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .chat-messages { flex: 1; padding: 24px 15%; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: #f8f9fa; }
+        
+        /* 訊息泡泡與樣式 */
+        .message-wrapper { display: flex; flex-direction: column; max-width: 65%; }
+        .sent-wrapper { align-self: flex-end; align-items: flex-end; }
+        .received-wrapper { align-self: flex-start; align-items: flex-start; }
+        
+        .sender-name { font-size: 12px; color: #6c757d; margin-bottom: 4px; }
+        .message { padding: 12px 18px; border-radius: 16px; font-size: 15px; word-break: break-word; line-height: 1.5; }
+        .sent { background: #0084ff; color: #ffffff; border-bottom-right-radius: 4px; }
+        .received { background: #e4e6eb; color: #050505; border-bottom-left-radius: 4px; }
+        
+        .message-img { max-width: 320px; max-height: 320px; border-radius: 12px; cursor: pointer; object-fit: cover; }
+        .sticker { font-size: 56px; line-height: 1; background: transparent !important; padding: 0 !important; }
+
+        /* 全螢幕寬度工具列與輸入區 */
+        .sticker-panel { display: none; padding: 12px 15%; background: #ffffff; border-top: 1px solid #eee; grid-template-columns: repeat(12, 1fr); gap: 10px; text-align: center; }
+        .sticker-panel.active { display: grid; }
+        .sticker-item { font-size: 28px; cursor: pointer; padding: 6px; border-radius: 8px; user-select: none; }
+        .sticker-item:hover { background: #f0f0f0; }
+
+        .chat-input-area { display: flex; align-items: center; padding: 16px 15%; background: #ffffff; border-top: 1px solid #e0e0e0; gap: 10px; }
+        .action-btn { background: none; border: none; font-size: 24px; cursor: pointer; padding: 8px; border-radius: 50%; color: #606770; display: flex; align-items: center; justify-content: center; }
+        .action-btn:hover { background: #f2f2f2; }
+        .chat-input-area input[type="text"] { flex: 1; padding: 12px 20px; border: 1px solid #e0e0e0; border-radius: 24px; outline: none; font-size: 15px; }
+        .send-btn { background: #1a73e8; color: white; border: none; padding: 12px 24px; border-radius: 20px; font-weight: bold; cursor: pointer; font-size: 15px; }
+        
+        .hidden { display: none !important; }
+
+        /* 螢幕較小時自動彈性調整內邊距 */
+        @media (max-width: 768px) {
+            .chat-messages, .chat-input-area, .sticker-panel { padding-left: 16px; padding-right: 16px; }
+            .message-wrapper { max-width: 80%; }
+            .sticker-panel { grid-template-columns: repeat(6, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-box" id="loginScreen">
+        <h2>登入系統</h2>
+        <input type="text" id="username" placeholder="帳號 (aki 或 yvonne)">
+        <input type="password" id="password" placeholder="密碼">
+        <button onclick="login()">登入</button>
+    </div>
+
+    <div class="chat-app hidden" id="chatScreen">
+        <div class="chat-header" id="chatHeader">即時對話</div>
+        
+        <div class="chat-messages" id="messageList"></div>
+
+        <div class="sticker-panel" id="stickerPanel">
+            <span class="sticker-item" onclick="sendSticker('😀')">😀</span>
+            <span class="sticker-item" onclick="sendSticker('😂')">😂</span>
+            <span class="sticker-item" onclick="sendSticker('❤️')">❤️</span>
+            <span class="sticker-item" onclick="sendSticker('👍')">👍</span>
+            <span class="sticker-item" onclick="sendSticker('🎉')">🎉</span>
+            <span class="sticker-item" onclick="sendSticker('🐶')">🐶</span>
+            <span class="sticker-item" onclick="sendSticker('🐱')">🐱</span>
+            <span class="sticker-item" onclick="sendSticker('🔥')">🔥</span>
+            <span class="sticker-item" onclick="sendSticker('✨')">✨</span>
+            <span class="sticker-item" onclick="sendSticker('😎')">😎</span>
+            <span class="sticker-item" onclick="sendSticker('🙏')">🙏</span>
+            <span class="sticker-item" onclick="sendSticker('😭')">😭</span>
+        </div>
+
+        <div class="chat-input-area">
+            <button class="action-btn" title="傳送照片" onclick="document.getElementById('imageInput').click()">📷</button>
+            <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="sendImage(this)">
+            
+            <button class="action-btn" title="貼圖" onclick="toggleStickerPanel()">😊</button>
+
+            <input type="text" id="messageInput" placeholder="輸入訊息..." onkeydown="if(event.key==='Enter') sendText()">
+            <button class="send-btn" onclick="sendText()">傳送</button>
+        </div>
+    </div>
+
+    <script>
+        const USERS = { 'aki': '1105', 'yvonne': '0817' };
+        let currentUser = '';
+        const channel = new BroadcastChannel('single_file_chat');
+
+        function login() {
+            const user = document.getElementById('username').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            
+            if (USERS[user] && USERS[user] === pass) {
+                currentUser = user;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('chatScreen').classList.remove('hidden');
+                document.getElementById('chatHeader').textContent = `已登入：${currentUser}`;
+                loadChatHistory();
+            } else {
+                alert('帳號或密碼錯誤！');
+            }
+        }
+
+        function loadChatHistory() {
+            const list = document.getElementById('messageList');
+            list.innerHTML = ''; 
+            const history = JSON.parse(localStorage.getItem('chat_history') || '[]');
+            history.forEach(msg => {
+                const isMe = (msg.sender === currentUser);
+                appendMessageToDom(msg, isMe);
+            });
+        }
+
+        function saveAndBroadcast(msgData) {
+            const history = JSON.parse(localStorage.getItem('chat_history') || '[]');
+            history.push(msgData);
+            localStorage.setItem('chat_history', JSON.stringify(history));
+
+            appendMessageToDom(msgData, true);
+            channel.postMessage(msgData);
+        }
+
+        function sendText() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            saveAndBroadcast({ sender: currentUser, type: 'text', content: text });
+            input.value = '';
+            closeStickerPanel();
+        }
+
+        function sendSticker(stickerEmoji) {
+            saveAndBroadcast({ sender: currentUser, type: 'sticker', content: stickerEmoji });
+            closeStickerPanel();
+        }
+
+        function sendImage(inputElement) {
+            const file = inputElement.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                saveAndBroadcast({ sender: currentUser, type: 'image', content: e.target.result });
+                inputElement.value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        channel.onmessage = (event) => {
+            const data = event.data;
+            if (data.sender !== currentUser) {
+                appendMessageToDom(data, false);
+            }
+        };
+
+        function appendMessageToDom(msg, isMe) {
+            const content = msg.content || msg.text || '';
+            const type = msg.type || 'text';
+
+            if (!content) return;
+
+            const list = document.getElementById('messageList');
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-wrapper ${isMe ? 'sent-wrapper' : 'received-wrapper'}`;
+            
+            if (!isMe) {
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'sender-name';
+                nameDiv.textContent = msg.sender;
+                wrapper.appendChild(nameDiv);
+            }
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${isMe ? 'sent' : 'received'}`;
+
+            if (type === 'image') {
+                const img = document.createElement('img');
+                img.src = content;
+                img.className = 'message-img';
+                img.onclick = () => window.open(content, '_blank');
+                msgDiv.appendChild(img);
+            } else if (type === 'sticker') {
+                msgDiv.classList.add('sticker');
+                msgDiv.textContent = content;
+            } else {
+                msgDiv.textContent = content;
+            }
+
+            wrapper.appendChild(msgDiv);
+            list.appendChild(wrapper);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        function toggleStickerPanel() {
+            const panel = document.getElementById('stickerPanel');
+            panel.classList.toggle('active');
+        }
+
+        function closeStickerPanel() {
+            document.getElementById('stickerPanel').classList.remove('active');
+        }
+    </script>
+</body>
+</html>
