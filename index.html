@@ -8,18 +8,15 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         html, body { width: 100%; height: 100%; overflow: hidden; background-color: #f0f2f5; display: flex; justify-content: center; align-items: center; }
         
-        /* 登入視窗居中 */
         .login-box { background: white; padding: 36px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 340px; text-align: center; }
         .login-box h2 { margin-bottom: 20px; color: #1a73e8; }
         .login-box input { width: 100%; padding: 12px; margin-bottom: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
         .login-box button { width: 100%; padding: 12px; background: #1a73e8; border: none; color: white; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 15px; }
 
-        /* 全螢幕主聊天介面 */
         .chat-app { width: 100vw; height: 100vh; background: #ffffff; display: flex; flex-direction: column; }
         .chat-header { background: #2c3e50; color: white; padding: 18px 24px; font-weight: bold; text-align: center; font-size: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .chat-messages { flex: 1; padding: 24px 15%; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; background: #f8f9fa; }
         
-        /* 訊息泡泡與樣式 */
         .message-wrapper { display: flex; flex-direction: column; max-width: 65%; }
         .sent-wrapper { align-self: flex-end; align-items: flex-end; }
         .received-wrapper { align-self: flex-start; align-items: flex-start; }
@@ -32,7 +29,6 @@
         .message-img { max-width: 320px; max-height: 320px; border-radius: 12px; cursor: pointer; object-fit: cover; }
         .sticker { font-size: 56px; line-height: 1; background: transparent !important; padding: 0 !important; }
 
-        /* 全螢幕寬度工具列與輸入區 */
         .sticker-panel { display: none; padding: 12px 15%; background: #ffffff; border-top: 1px solid #eee; grid-template-columns: repeat(12, 1fr); gap: 10px; text-align: center; }
         .sticker-panel.active { display: grid; }
         .sticker-item { font-size: 28px; cursor: pointer; padding: 6px; border-radius: 8px; user-select: none; }
@@ -46,7 +42,6 @@
         
         .hidden { display: none !important; }
 
-        /* 螢幕較小時自動彈性調整內邊距 */
         @media (max-width: 768px) {
             .chat-messages, .chat-input-area, .sticker-panel { padding-left: 16px; padding-right: 16px; }
             .message-wrapper { max-width: 80%; }
@@ -65,7 +60,6 @@
 
     <div class="chat-app hidden" id="chatScreen">
         <div class="chat-header" id="chatHeader">即時對話</div>
-        
         <div class="chat-messages" id="messageList"></div>
 
         <div class="sticker-panel" id="stickerPanel">
@@ -97,10 +91,16 @@
     <script>
         const USERS = { 'aki': '1105', 'yvonne': '0817' };
         let currentUser = '';
-        const channel = new BroadcastChannel('single_file_chat');
+        
+        // 請修改下面這兩行（第 103 行 與 第 104 行）：
+        const BIN_ID = "6a912423f5f4af5e294c8f05";
+        const API_KEY = "$2a$10$QP1xrivA24zaqm32svrJkucd./vyr5H5hMz/FF.7ekdeisuhOJOKG";
+
+        const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+        let messageHistory = [];
 
         function login() {
-            const user = document.getElementById('username').value.trim();
+            const user = document.getElementById('username').value.trim().toLowerCase();
             const pass = document.getElementById('password').value.trim();
             
             if (USERS[user] && USERS[user] === pass) {
@@ -108,29 +108,53 @@
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('chatScreen').classList.remove('hidden');
                 document.getElementById('chatHeader').textContent = `已登入：${currentUser}`;
-                loadChatHistory();
+                
+                fetchMessages();
+                setInterval(fetchMessages, 2000);
             } else {
                 alert('帳號或密碼錯誤！');
             }
         }
 
-        function loadChatHistory() {
+        function fetchMessages() {
+            fetch(API_URL + "/latest", {
+                headers: { 'X-Master-Key': API_KEY }
+            })
+            .then(res => res.json())
+            .then(data => {
+                const cloudMessages = data.record.messages || [];
+                if (cloudMessages.length !== messageHistory.length) {
+                    messageHistory = cloudMessages;
+                    renderAllMessages();
+                }
+            })
+            .catch(err => console.log('同步中...'));
+        }
+
+        function updateCloudMessages() {
+            fetch(API_URL, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Master-Key': API_KEY 
+                },
+                body: JSON.stringify({ messages: messageHistory })
+            });
+        }
+
+        function renderAllMessages() {
             const list = document.getElementById('messageList');
-            list.innerHTML = ''; 
-            const history = JSON.parse(localStorage.getItem('chat_history') || '[]');
-            history.forEach(msg => {
+            list.innerHTML = '';
+            messageHistory.forEach(msg => {
                 const isMe = (msg.sender === currentUser);
                 appendMessageToDom(msg, isMe);
             });
         }
 
-        function saveAndBroadcast(msgData) {
-            const history = JSON.parse(localStorage.getItem('chat_history') || '[]');
-            history.push(msgData);
-            localStorage.setItem('chat_history', JSON.stringify(history));
-
-            appendMessageToDom(msgData, true);
-            channel.postMessage(msgData);
+        function sendMessage(msgData) {
+            messageHistory.push(msgData);
+            renderAllMessages();
+            updateCloudMessages();
         }
 
         function sendText() {
@@ -138,13 +162,13 @@
             const text = input.value.trim();
             if (!text) return;
 
-            saveAndBroadcast({ sender: currentUser, type: 'text', content: text });
+            sendMessage({ sender: currentUser, type: 'text', content: text, timestamp: Date.now() });
             input.value = '';
             closeStickerPanel();
         }
 
         function sendSticker(stickerEmoji) {
-            saveAndBroadcast({ sender: currentUser, type: 'sticker', content: stickerEmoji });
+            sendMessage({ sender: currentUser, type: 'sticker', content: stickerEmoji, timestamp: Date.now() });
             closeStickerPanel();
         }
 
@@ -154,23 +178,15 @@
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                saveAndBroadcast({ sender: currentUser, type: 'image', content: e.target.result });
+                sendMessage({ sender: currentUser, type: 'image', content: e.target.result, timestamp: Date.now() });
                 inputElement.value = '';
             };
             reader.readAsDataURL(file);
         }
 
-        channel.onmessage = (event) => {
-            const data = event.data;
-            if (data.sender !== currentUser) {
-                appendMessageToDom(data, false);
-            }
-        };
-
         function appendMessageToDom(msg, isMe) {
-            const content = msg.content || msg.text || '';
+            const content = msg.content || '';
             const type = msg.type || 'text';
-
             if (!content) return;
 
             const list = document.getElementById('messageList');
@@ -206,8 +222,7 @@
         }
 
         function toggleStickerPanel() {
-            const panel = document.getElementById('stickerPanel');
-            panel.classList.toggle('active');
+            document.getElementById('stickerPanel').classList.toggle('active');
         }
 
         function closeStickerPanel() {
